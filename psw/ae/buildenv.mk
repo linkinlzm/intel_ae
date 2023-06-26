@@ -29,9 +29,9 @@
 #
 #
 
-# CXX := clang++-13
-# CC := clang-13
-# LD := lld
+CXX := clang++-13
+CC := clang-13
+LD := lld
 
 
 ENV := $(strip $(wildcard $(TOP_DIR)/buildenv.mk))
@@ -65,7 +65,7 @@ else
 endif
 EXTERNAL_LIB := -lsgx_tservice
 
-EXTERNAL_LIB += -lsgx_tstdc -lsgx_tcrypto -lsgx_tcxx
+EXTERNAL_LIB += -lsgx_tstdc -lsgx_tcrypto -lsgx_tcxx -lsgx_pthread
 
 INCLUDE := -I$(LINUX_PSW_DIR)/ae/inc                   \
            -I$(SGX_HEADER_DIR)                         \
@@ -79,11 +79,12 @@ EDGER8R   := $(SGX_BIN_DIR)/sgx_edger8r
 CXXFLAGS  += $(ENCLAVE_CXXFLAGS)
 CFLAGS    += $(ENCLAVE_CFLAGS)
 
-LDTFLAGS  = -L$(SGX_LIB_DIR) -Wl,--whole-archive $(TRTSLIB) -Wl,--no-whole-archive \
+LDTFLAGS  = -L$(SGX_LIB_DIR) -Wl,--whole-archive -lSGXSanRTEnclave $(TRTSLIB) -Wl,--no-whole-archive \
             -Wl,--start-group $(EXTERNAL_LIB) -Wl,--end-group -Wl,--build-id       \
-            -Wl,--version-script=$(ROOT_DIR)/build-scripts/enclave.lds $(ENCLAVE_LDFLAGS)
+            $(ENCLAVE_LDFLAGS)
+            # -Wl,--version-script=$(ROOT_DIR)/build-scripts/enclave.lds $(ENCLAVE_LDFLAGS)
 
-LDTFLAGS += -fuse-ld=gold -Wl,--rosegment -Wl,-Map=out.map -Wl,--undefined=version -Wl,--gc-sections
+LDTFLAGS += -fuse-ld=$(LD) -Wl,--rosegment -Wl,-Map=out.map -Wl,--undefined=version -Wl,--gc-sections
 
 DEFINES := -D__linux__
 

@@ -129,25 +129,23 @@ inline T *random_fill(T *ptr, std::size_t size)
     return ptr;
 }
 
+template <typename T, std::size_t A, unsigned M>
+struct randomly_placed_buffer_base {
+    constexpr static std::size_t size(std::size_t count = 1) {
+        return sizeof(T) * count + M - A;
+    }
+private:
+};
 /*
  * randomly_placed_buffer<T, M> randomly picks an address in a bigger buffer to
  * store an object (or objects) of T.
  */
 template <class T, std::size_t A, unsigned M = 0x1000>
-struct alignas(A)randomly_placed_buffer
+struct alignas(A)randomly_placed_buffer : randomly_placed_buffer_base<T, A, M>
 {
-    static constexpr std::size_t size(std::size_t count = 1)
-    {
-        //
-        // gives error with gcc 4.8
-        //
-        //return sizeof(randomly_placed_buffer<T, A, M>) + sizeof(T) * (count - 1);
-        return sizeof(T) * count + M - A;
-    }
-
     randomly_placed_buffer<T, A, M>& wipe(std::size_t count = 1)
     {
-        return *reinterpret_cast<decltype(this)>(memset(__bigger_, 0, size(count)));
+        return *reinterpret_cast<decltype(this)>(memset(__bigger_, 0, randomly_placed_buffer_base<T, A, M>::size(count)));
     }
 
     ~randomly_placed_buffer(void)
@@ -207,7 +205,7 @@ struct alignas(A)randomly_placed_buffer
     // version (below) instead
     static void *operator new (std::size_t, std::size_t count = 1, unsigned nbufs = 16)
     {
-        auto sz = size(count);
+        auto sz = randomly_placed_buffer_base<T, A, M>::size(count);
         void **ppv[nbufs];
 
         // Buffers returned by malloc() are suitable for all scalar types, thus
@@ -281,7 +279,7 @@ private:
         }
     };
 
-    char __bigger_[size()];
+    char __bigger_[randomly_placed_buffer_base<T, A, M>::size()];
 };
 
 template <class T, unsigned M = 0x1000>

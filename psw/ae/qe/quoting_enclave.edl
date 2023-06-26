@@ -34,6 +34,9 @@ enclave {
 include "sgx_report.h"
 include "sgx_quote.h"
 from "sgx_tstdc.edl" import *;
+
+from "SGXSanRTEnclave.edl" import *;
+
     trusted {
         public uint32_t verify_blob([size = blob_size, in, out] uint8_t *p_blob,
                                     uint32_t blob_size,

@@ -33,8 +33,8 @@ TOP_DIR := ../../..
 MITIGATION-CVE-2020-0551=LOAD
 include ../buildenv.mk
 
-CXXFLAGS  += -Werror
-CFLAGS    += -Werror 
+# CXXFLAGS  += -Werror
+# CFLAGS    += -Werror 
 
 AENAME = pce
 
@@ -51,12 +51,14 @@ OBJ := $(SRC:.cpp=.o)
 OBJS := $(sort $(OBJ) version.o)
 
 .PHONY: all
-all: $(SONAME)
+all: $(SONAME) pcefuzz pce.signed.so
+SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x64/sgx_sign
 
-ifneq ($(SGX_MODE), HW)
-all: pce_sim_private_key.pem
-	$(SGXSIGN) sign -key pce_sim_private_key.pem -enclave $(SONAME) -out libsgx_$(AENAME).signed.so -config $(CONFIG)
-endif
+
+# ifneq ($(SGX_MODE), HW)
+# all: pce_sim_private_key.pem
+# 	$(SGXSIGN) sign -key pce_sim_private_key.pem -enclave $(SONAME) -out libsgx_$(AENAME).signed.so -config $(CONFIG)
+# endif
 
 $(SONAME): $(OBJS)
 	@echo "Start"
@@ -72,15 +74,60 @@ pce.o: $(AENAME)_t.c
 $(AENAME)_t.c: $(AENAME).edl
 	@$(EDGER8R) --trusted $< --search-path $(SGX_HEADER_DIR)
 
+pce.signed.so: pce.so
+	@$(SGX_ENCLAVE_SIGNER) sign -key ../ref_le/ref_keys/enclave_private_test_key.pem -enclave pce.so -out $@ -config config.xml
+	@echo "SIGN =>  $@"
+
 $(BUILD_DIR):
 	@$(MKDIR) $@
+
+# Gen fuzzer
+App_C_Flags := -fPIC -Wno-attributes $(INCLUDE) $(DEFINES)
+
+App_Link_Flags := -L$(SGX_LIB_DIR) -lpthread
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_urts_sim
+else
+	App_Link_Flags += -lsgx_urts
+endif
+
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_uae_service_sim
+else
+	App_Link_Flags += -lsgx_uae_service
+endif
+
+App_Link_Flags += \
+	-ldl \
+	-Wl,-rpath=$(SGX_LIB_DIR) \
+	-Wl,-whole-archive -lSGXSanRTApp -Wl,-no-whole-archive \
+	-lSGXFuzzerRT \
+	-lcrypto \
+	-lboost_program_options \
+	-rdynamic
+
+pce_u.c: $(EDGER8R) pce.edl
+	@$(EDGER8R) --untrusted pce.edl --search-path ../enclave --search-path $(SGX_SDK)/include --dump-parse ./Enclave.edl.json
+
+pce_u.o: pce_u.c
+	@echo "CC   <=  $<"
+	$(CXX) $(App_C_Flags) -c $< -o $@  \
+	-flegacy-pass-manager \
+	-Xclang -load -Xclang $(SGX_SDK)/lib64/libSGXFuzzerPass.so
+
+pcefuzz: pce_u.o
+	@echo  "Gen fuzzer"
+	$(CXX) $^ -o $@ $(App_Link_Flags)
 
 .PHONY: clean
 clean:
 	@$(RM) *.o
 	@$(RM) *.so
 	@$(RM) *.map
-	@$(RM) *_t.* 
+	@$(RM) *_t.* *_u.*
+	@$(RM) *.edl.json
+	@$(RM) $(SONAME).*
+	@$(RM) pcefuzz InstrumentStatistics.json
 
 .PHONY: rebuild
 rebuild:

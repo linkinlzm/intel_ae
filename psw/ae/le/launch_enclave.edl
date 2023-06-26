@@ -32,6 +32,8 @@
 
 enclave {
 
+    from "SGXSanRTEnclave.edl" import *;
+
     include "arch.h"
     include "sgx_report.h"
     from "sgx_tstdc.edl" import *;

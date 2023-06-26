@@ -32,6 +32,9 @@
 enclave{
     include "provision_msg.h"
     from "sgx_tstdc.edl" import *;
+
+    from "SGXSanRTEnclave.edl" import *;
+
     trusted {
         public uint32_t gen_prov_msg1_data_wrapper([in]const extended_epid_group_blob_t *xegb,
                                                    [in]const signed_pek_t *pek,

@@ -33,8 +33,8 @@ TOP_DIR := ../../..
 MITIGATION-CVE-2020-0551=LOAD
 include ../buildenv.mk
 
-CXXFLAGS  += -Werror
-CFLAGS	  += -Werror 
+# CXXFLAGS  += -Werror
+# CFLAGS	  += -Werror 
 AENAME = provision_enclave
 
 INCLUDE += -I$(LINUX_PSW_DIR)/ae/data/constants/linux 
@@ -57,12 +57,18 @@ OBJS := $(sort $(OBJ) version.o)
 
 AENAME_OUT := $(AENAME).so
 
-EPID_FILTER = -Werror -nostdinc -nostdinc++
-EPID_CFLAGS = $(filter-out $(EPID_FILTER),$(ENCLAVE_CFLAGS))
-EPID_CXXFLAGS = $(filter-out $(EPID_FILTER),$(ENCLAVE_CXXFLAGS))
+# EPID_FILTER = -Werror -nostdinc -nostdinc++
+# EPID_CFLAGS = $(filter-out $(EPID_FILTER),$(ENCLAVE_CFLAGS))
+# EPID_CXXFLAGS = $(filter-out $(EPID_FILTER),$(ENCLAVE_CXXFLAGS))
+EPID_CFLAGS = -ffreestanding -fvisibility=hidden -fpie -fno-strict-overflow -fno-delete-null-pointer-checks
+EPID_CXXFLAGS = $(EPID_CFLAGS)
 
 .PHONY: all
-all: $(SONAME) 
+all: $(SONAME) pvefuzz pve.signed.so
+SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x64/sgx_sign
+pve.signed.so: pve.so
+	@$(SGX_ENCLAVE_SIGNER) sign -key ../ref_le/ref_keys/enclave_private_test_key.pem -enclave pve.so -out $@ -config config.xml
+	@echo "SIGN =>  $@"
 
 .PHONY: EPID
 EPID:
@@ -81,12 +87,54 @@ provision_enclave.o: $(AENAME)_t.c
 $(AENAME)_t.c: $(AENAME).edl
 	@$(EDGER8R) --trusted $< --search-path $(SGX_HEADER_DIR)
 
+# Gen fuzzer
+App_C_Flags := -fPIC -Wno-attributes $(INCLUDE) $(DEFINES)
+
+App_Link_Flags := -L$(SGX_LIB_DIR) -lpthread
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_urts_sim
+else
+	App_Link_Flags += -lsgx_urts
+endif
+
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_uae_service_sim
+else
+	App_Link_Flags += -lsgx_uae_service
+endif
+
+App_Link_Flags += \
+	-ldl \
+	-Wl,-rpath=$(SGX_LIB_DIR) \
+	-Wl,-whole-archive -lSGXSanRTApp -Wl,-no-whole-archive \
+	-lSGXFuzzerRT \
+	-lcrypto \
+	-lboost_program_options \
+	-rdynamic
+
+provision_enclave_u.c: $(EDGER8R) provision_enclave.edl
+	@$(EDGER8R) --untrusted provision_enclave.edl --search-path ../enclave --search-path $(SGX_SDK)/include --dump-parse ./Enclave.edl.json
+
+provision_enclave_u.o: provision_enclave_u.c
+	@echo "CC   <=  $<"
+	$(CXX) $(App_C_Flags) -c $< -o $@  \
+	-flegacy-pass-manager \
+	-Xclang -load -Xclang $(SGX_SDK)/lib64/libSGXFuzzerPass.so
+
+pvefuzz: provision_enclave_u.o
+	@echo  "Gen fuzzer"
+	$(CXX) $^ -o $@ $(App_Link_Flags)
+
 .PHONY: clean
 clean:
 	@$(RM) *.o
 	@$(RM) *.so
 	@$(RM) *.map
-	@$(RM) *_t.*
+	@$(RM) *_t.* *_u.*
+	@$(RM) *.edl.json
+	@$(RM) $(SONAME).*
+	@$(RM) pvefuzz
+	@$(RM) pvefuzz InstrumentStatistics.json $(EPID_SDK_DIR)/InstrumentStatistics.json
 ifeq ("$(shell test -f $(EPID_SDK_DIR)/Makefile && echo Makefile exists)", "Makefile exists")
 	-$(MAKE) -C $(EPID_SDK_DIR) clean
 endif

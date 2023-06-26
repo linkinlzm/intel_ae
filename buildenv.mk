@@ -203,34 +203,34 @@ BINUTILS_DIR ?= $(ROOT_DIR)/external/toolset/nix/
 endif
 
 # enable -B option for all the build
-MITIGATION_CFLAGS += -B$(BINUTILS_DIR)
+# MITIGATION_CFLAGS += -B$(BINUTILS_DIR)
 
-ifeq ($(MITIGATION_C), 1)
-ifeq ($(MITIGATION_INDIRECT), 1)
-    MITIGATION_CFLAGS += -mindirect-branch-register
-endif
-ifeq ($(MITIGATION_RET), 1)
-CC_NO_LESS_THAN_8 := $(shell expr $(CC_VERSION) \>\= "8")
-ifeq ($(CC_NO_LESS_THAN_8), 1)
-    MITIGATION_CFLAGS += -fcf-protection=none
-endif
-    MITIGATION_CFLAGS += -mfunction-return=thunk-extern
-endif
-endif
+# ifeq ($(MITIGATION_C), 1)
+# ifeq ($(MITIGATION_INDIRECT), 1)
+#     MITIGATION_CFLAGS += -mindirect-branch-register
+# endif
+# ifeq ($(MITIGATION_RET), 1)
+# CC_NO_LESS_THAN_8 := $(shell expr $(CC_VERSION) \>\= "8")
+# ifeq ($(CC_NO_LESS_THAN_8), 1)
+#     MITIGATION_CFLAGS += -fcf-protection=none
+# endif
+#     MITIGATION_CFLAGS += -mfunction-return=thunk-extern
+# endif
+# endif
 
-ifeq ($(MITIGATION_ASM), 1)
-    MITIGATION_ASFLAGS += -fno-plt
-ifeq ($(MITIGATION_AFTERLOAD), 1)
-    MITIGATION_ASFLAGS += -Wa,-mlfence-after-load=yes -Wa,-mlfence-before-indirect-branch=memory
-else
-    MITIGATION_ASFLAGS += -Wa,-mlfence-before-indirect-branch=all
-endif
-ifeq ($(MITIGATION_RET), 1)
-    MITIGATION_ASFLAGS += -Wa,-mlfence-before-ret=shl
-endif
-endif
+# ifeq ($(MITIGATION_ASM), 1)
+#     MITIGATION_ASFLAGS += -fno-plt
+# ifeq ($(MITIGATION_AFTERLOAD), 1)
+#     MITIGATION_ASFLAGS += -Wa,-mlfence-after-load=yes -Wa,-mlfence-before-indirect-branch=memory
+# else
+#     MITIGATION_ASFLAGS += -Wa,-mlfence-before-indirect-branch=all
+# endif
+# ifeq ($(MITIGATION_RET), 1)
+#     MITIGATION_ASFLAGS += -Wa,-mlfence-before-ret=shl
+# endif
+# endif
 
-MITIGATION_CFLAGS += $(MITIGATION_ASFLAGS)
+# MITIGATION_CFLAGS += $(MITIGATION_ASFLAGS)
 
 # Compiler and linker options for an Enclave
 #
@@ -240,7 +240,14 @@ MITIGATION_CFLAGS += $(MITIGATION_ASFLAGS)
 # When `pie' is enabled, the linker (both BFD and Gold) under Ubuntu 14.04
 # will hide all symbols from dynamic symbol table even if they are marked
 # as `global' in the LD version script.
-ENCLAVE_CFLAGS   = -ffreestanding -nostdinc -fvisibility=hidden -fpie -fno-strict-overflow -fno-delete-null-pointer-checks
+ENCLAVE_CFLAGS   = -ffreestanding -nostdinc -fvisibility=hidden -fpie -fno-strict-overflow -fno-delete-null-pointer-checks \
+    -fno-discard-value-names \
+	-flegacy-pass-manager \
+	-Xclang -load -Xclang $(SGX_SDK)/lib64/libSGXFuzzerPass.so \
+	-mllvm --at-enclave=true \
+	-flegacy-pass-manager \
+	-Xclang -load -Xclang $(SGX_SDK)/lib64/libSGXSanPass.so
+
 ENCLAVE_CXXFLAGS = $(ENCLAVE_CFLAGS) -nostdinc++
 ENCLAVE_LDFLAGS  = -B$(BINUTILS_DIR) $(COMMON_LDFLAGS) -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
                    -Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
@@ -314,7 +321,7 @@ IPP_LIBS_DIR    := $(SGX_IPP_DIR)/lib/linux/intel64/$(IPP_SUBDIR)
 LD_IPP          := -lippcp
 
 ######## SGX SDK Settings ########
-SGX_SDK ?= /opt/intel/sgxsdk
+SGX_SDK ?= $(abspath ../../../../../install)
 SGX_HEADER_DIR ?= $(SGX_SDK)/include
 
 ifeq ($(ARCH), x86)

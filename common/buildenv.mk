@@ -41,23 +41,23 @@ BINUTILS_DIR ?= /usr/local/bin
 MITIGATION_CFLAGS += -B$(BINUTILS_DIR)
 MITIGATION_LDFLAGS += -B$(BINUTILS_DIR)
 
-ifeq ($(MITIGATION-CVE-2020-0551), LOAD)
-ifeq ($(CC_NO_LESS_THAN_8), 1)
-    MITIGATION_CFLAGS += -fcf-protection=none
-endif
-    MITIGATION_CFLAGS += -mindirect-branch-register -mfunction-return=thunk-extern
-    MITIGATION_ASFLAGS := -Wa,-mlfence-after-load=yes -Wa,-mlfence-before-indirect-branch=memory -Wa,-mlfence-before-ret=shl
-    MITIGATION_ASFLAGS += -fno-plt
-    SGX_TRUSTED_LIBRARY_PATH := $(SGX_TRUSTED_LIBRARY_PATH)/cve_2020_0551_load
-else ifeq ($(MITIGATION-CVE-2020-0551), CF)
-ifeq ($(CC_NO_LESS_THAN_8), 1)
-    MITIGATION_CFLAGS += -fcf-protection=none
-endif
-    MITIGATION_CFLAGS += -mindirect-branch-register -mfunction-return=thunk-extern
-    MITIGATION_ASFLAGS := -Wa,-mlfence-before-indirect-branch=all -Wa,-mlfence-before-ret=shl
-    MITIGATION_ASFLAGS += -fno-plt
-    SGX_TRUSTED_LIBRARY_PATH := $(SGX_TRUSTED_LIBRARY_PATH)/cve_2020_0551_cf
-endif
+# ifeq ($(MITIGATION-CVE-2020-0551), LOAD)
+# ifeq ($(CC_NO_LESS_THAN_8), 1)
+#     MITIGATION_CFLAGS += -fcf-protection=none
+# endif
+#     MITIGATION_CFLAGS += -mindirect-branch-register -mfunction-return=thunk-extern
+#     MITIGATION_ASFLAGS := -Wa,-mlfence-after-load=yes -Wa,-mlfence-before-indirect-branch=memory -Wa,-mlfence-before-ret=shl
+#     MITIGATION_ASFLAGS += -fno-plt
+#     SGX_TRUSTED_LIBRARY_PATH := $(SGX_TRUSTED_LIBRARY_PATH)/cve_2020_0551_load
+# else ifeq ($(MITIGATION-CVE-2020-0551), CF)
+# ifeq ($(CC_NO_LESS_THAN_8), 1)
+#     MITIGATION_CFLAGS += -fcf-protection=none
+# endif
+#     MITIGATION_CFLAGS += -mindirect-branch-register -mfunction-return=thunk-extern
+#     MITIGATION_ASFLAGS := -Wa,-mlfence-before-indirect-branch=all -Wa,-mlfence-before-ret=shl
+#     MITIGATION_ASFLAGS += -fno-plt
+#     SGX_TRUSTED_LIBRARY_PATH := $(SGX_TRUSTED_LIBRARY_PATH)/cve_2020_0551_cf
+# endif
 
 
-MITIGATION_CFLAGS += $(MITIGATION_ASFLAGS)
+# MITIGATION_CFLAGS += $(MITIGATION_ASFLAGS)

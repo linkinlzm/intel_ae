@@ -34,8 +34,8 @@ include ../buildenv.mk
 
 AENAME = launch_enclave
 
-CFLAGS   += -Werror
-CXXFLAGS += -Werror
+# CFLAGS   += -Werror
+# CXXFLAGS += -Werror
 
 INCLUDE += -I$(LINUX_PSW_DIR)/ae/common
 INCLUDE += -I$(LINUX_PSW_DIR)/ae/data/constants/linux 
@@ -44,7 +44,8 @@ INCLUDE += -I$(SGX_HEADER_DIR)/libcxx
 SRC := $(wildcard *.cpp)
 OBJ := $(SRC:.cpp=.o)
 OBJS := $(sort $(OBJ) version.o)
-AENAME_OUT :=  $(SONAME) #generate $(SONAME) only but do not sign it
+AENAME_OUT :=  $(SONAME) lefuzz le.signed.so #generate $(SONAME) only but do not sign it
+SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x64/sgx_sign
 
 CONFIG := config_linux.xml
 
@@ -62,15 +63,61 @@ $(OBJ): %.o:%.cpp
 $(AENAME)_t.c: $(EDLFILE)
 	@$(EDGER8R) --trusted $< --search-path $(SGX_HEADER_DIR)
 
+le.signed.so: le.so
+	@$(SGX_ENCLAVE_SIGNER) sign -key ../ref_le/ref_keys/enclave_private_test_key.pem -enclave $(AENAME) -out $@ -config config_linux.xml
+	@echo "SIGN =>  $@"
+
 $(BUILD_DIR):
 	@$(MKDIR) $@
+
+# Gen fuzzer
+App_C_Flags := -fPIC -Wno-attributes $(INCLUDE) $(DEFINES)
+
+App_Link_Flags := -L$(SGX_LIB_DIR) -lpthread
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_urts_sim
+else
+	App_Link_Flags += -lsgx_urts
+endif
+
+ifneq ($(SGX_MODE), HW)
+	App_Link_Flags += -lsgx_uae_service_sim
+else
+	App_Link_Flags += -lsgx_uae_service
+endif
+
+App_Link_Flags += \
+	-ldl \
+	-Wl,-rpath=$(SGX_LIB_DIR) \
+	-Wl,-whole-archive -lSGXSanRTApp -Wl,-no-whole-archive \
+	-lSGXFuzzerRT \
+	-lcrypto \
+	-lboost_program_options \
+	-rdynamic
+
+launch_enclave_u.c: $(EDGER8R) launch_enclave.edl
+	@$(EDGER8R) --untrusted launch_enclave.edl --search-path ../enclave --search-path $(SGX_SDK)/include --dump-parse ./Enclave.edl.json
+
+launch_enclave_u.o: launch_enclave_u.c
+	@echo "CC   <=  $<"
+	$(CXX) $(App_C_Flags) -c $< -o $@  \
+	-flegacy-pass-manager \
+	-Xclang -load -Xclang $(SGX_SDK)/lib64/libSGXFuzzerPass.so
+
+lefuzz: launch_enclave_u.o
+	@echo  "Gen fuzzer"
+	$(CXX) $^ -o $@ $(App_Link_Flags)
+
 
 .PHONY: clean
 clean:
 	@$(RM) *.o
 	@$(RM) *.so
 	@$(RM) *.map
-	@$(RM) *_t.*
+	@$(RM) *_t.* *_u.*
+	@$(RM) $(SONAME).*
+	@$(RM) lefuzz Enclave.edl.json
+	@rm -f InstrumentStatistics.json
 
 .PHONY: rebuild
 rebuild: 
