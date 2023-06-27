@@ -64,7 +64,7 @@ $(AENAME)_t.c: $(EDLFILE)
 	@$(EDGER8R) --trusted $< --search-path $(SGX_HEADER_DIR)
 
 le.signed.so: le.so
-	@$(SGX_ENCLAVE_SIGNER) sign -key ../ref_le/ref_keys/enclave_private_test_key.pem -enclave $(AENAME) -out $@ -config config_linux.xml
+	@$(SGX_ENCLAVE_SIGNER) sign -key ../ref_le/ref_keys/enclave_private_test_key.pem -enclave le.so -out $@ -config config_linux.xml
 	@echo "SIGN =>  $@"
 
 $(BUILD_DIR):
@@ -95,7 +95,7 @@ App_Link_Flags += \
 	-lboost_program_options \
 	-rdynamic
 
-launch_enclave_u.c: $(EDGER8R) launch_enclave.edl
+launch_enclave_u.c: $(EDGER8R) launch_enclave.edl le.signed.so
 	@$(EDGER8R) --untrusted launch_enclave.edl --search-path ../enclave --search-path $(SGX_SDK)/include --dump-parse ./Enclave.edl.json
 
 launch_enclave_u.o: launch_enclave_u.c
